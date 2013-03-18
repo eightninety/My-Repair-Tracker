@@ -1,0 +1,878 @@
+<?php
+	require_once "includes/functions.php";
+	include "includes/authorize_ro_vo.html";
+
+  if ($lookup_customer_connect=="Y")
+    {
+      $rowspan=6;
+    }
+  else
+    {
+      $rowspan=5;
+    }
+
+  $message="";
+
+/*----------------------------------------------------------------------*
+ * Get the name of the logo for the shop in case emails are to be sent. *
+ *----------------------------------------------------------------------*/
+	$sp_logo_name = "";
+	$sql = "SELECT company_branding_logo_file_name FROM service_provider WHERE id='$lookup_shop_id' LIMIT 1";
+	$result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+	if ($row=mysql_fetch_array($result))
+		{
+			$sp_logo_name = $row[company_branding_logo_file_name];
+		}
+
+
+  if ($_POST["update_mpi"])
+    {
+      $from="MyRepairTracker.com Shop Talk <shoptalk@myrepairtracker.com>";
+      if ($spa_email)
+        {
+					include "includes/standard_email_top.php";
+					$body .= "
+<h2>A Note from My Repair Tracker</h2>
+<div style=\"border: 1px solid black; background-color: white; padding-top: 10px; padding-right: 10px; padding-bottom: 10px; padding-left: 10px; width: 50%\">
+<p><b>To:</b> $spa_name</p>
+<p><b>Repair Order Number:</b> $repair_order_number</p>
+<p><b>Vehicle Owner Last Name:</b> $vehicle_owner_last_name</p>
+<p>The customer has requested a FREE Multi-Point Safety Inspection. The Repair Order has been updated.</p></p>";
+					if ($sp_logo_name) {
+						$body .= "<img src=\"http://www.myrepairtracker.com/getlogo.html?lookup_id=$cookie_sp_id\" /><br />";
+					}
+					$body .= "<i>$sp_co_name</i></p>";
+					include "includes/standard_email_bottom.php";
+					$to=$spa_name." <".$spa_email.">";
+					$subject="Keeping You Informed";
+					$headers = "From: $from\r\n";
+					$headers .= "MIME-Version: 1.0\r\n";
+					$headers .= "Content-Type: text/html; charset=ISO-8859-1\r\n";
+					mail($to, $subject, $body, $headers);
+        }
+      if ($lookup_service_alert_contact_email)
+        {
+        	$from="MyRepairTracker.com Shop Talk <shoptalk@myrepairtracker.com>";
+					include "includes/standard_email_top.php";
+					$body .= "
+<h2>A Note from My Repair Tracker</h2>
+<div style=\"border: 1px solid black; background-color: white; padding-top: 10px; padding-right: 10px; padding-bottom: 10px; padding-left: 10px; width: 50%\">
+<p><b>To:</b> $spa_name</p>
+<p><b>Repair Order Number:</b> $repair_order_number</p>
+<p><b>Vehicle Owner Last Name:</b> $vehicle_owner_last_name</p>
+<p>The customer has requested a FREE Multi-Point Safety Inspection. The Repair Order has been updated.</p></p>";
+					if ($sp_logo_name) {
+						$body .= "<img src=\"http://www.myrepairtracker.com/getlogo.html?lookup_id=$cookie_sp_id\" /><br />";
+					}
+					$body .= "<i>$sp_co_name</i></p>";
+					include "includes/standard_email_bottom.php";
+          $to=$lookup_service_alert_contact_email;
+					$subject="Keeping You Informed";
+					$headers = "From: $from\r\n";
+					$headers .= "MIME-Version: 1.0\r\n";
+					$headers .= "Content-Type: text/html; charset=ISO-8859-1\r\n";
+					mail($to, $subject, $body, $headers);
+        }
+      $sql_note="MESSAGE FROM CUSTOMER: Multi-Point Safety Inspection requested";
+      $sql="INSERT INTO repair_order_history (date_added, repair_order_id, type, note) VALUES (NOW(), $cookie_vo_ro_id, 'C', '$sql_note')";
+      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+      $message="<p>Your request for your FREE Multi-Point Safety Inspection has been sent to your Service Advisor. A note has been added to the Repair Notes.</p>";
+      $email_message="";
+      $sql="UPDATE repair_order SET multi_point_inspection='Y' WHERE id=$cookie_vo_ro_id LIMIT 1";
+      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+
+      $today=date("Ymd");
+      $sql="SELECT COUNT(*) AS found_it FROM service_provider_customer_page_count WHERE date=$today AND service_provider_id=$lookup_id";
+      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+      $row=mysql_fetch_array($result);
+      if ($row["found_it"])
+        {
+          $sql="UPDATE service_provider_customer_page_count SET mpi_count=mpi_count+1 WHERE date=$today AND service_provider_id=$lookup_id LIMIT 1";
+        }
+      else
+        {
+          $sql="INSERT INTO service_provider_customer_page_count (service_provider_id, date, mpi_count) VALUES ($lookup_id, $today, 1)";
+        }
+      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+    }
+
+  if (($send_message) && ($email_message))
+    {
+      $clean_email_message=mysql_real_escape_string($email_message);
+//      if (BannedWordFound($clean_email_message))
+//      	{
+//				}
+//			else
+//				{
+		      if ($spa_email)
+		        {
+				      $from="MyRepairTracker.com Shop Talk <shoptalk@myrepairtracker.com>";
+							include "includes/standard_email_top.php";
+							$body .= "
+<h2>A Note from My Repair Tracker</h2>
+<div style=\"border: 1px solid black; background-color: white; padding-top: 10px; padding-right: 10px; padding-bottom: 10px; padding-left: 10px; width: 50%\">
+<p><b>To:</b> $spa_name</p>
+<p><b>Repair Order Number:</b> $repair_order_number</p>
+<p><b>Vehicle Owner Last Name:</b> $vehicle_owner_last_name</p>
+<p>$clean_email_message</p></p>";
+							if ($sp_logo_name) {
+								$body .= "<img src=\"http://www.myrepairtracker.com/getlogo.html?lookup_id=$cookie_sp_id\" /><br />";
+							}
+							$body .= "<i>$sp_co_name</i></p>";
+							include "includes/standard_email_bottom.php";
+							$to=$spa_name." <".$spa_email.">";
+							$subject="Keeping You Informed";
+							$headers = "From: $from\r\n";
+							$headers .= "MIME-Version: 1.0\r\n";
+							$headers .= "Content-Type: text/html; charset=ISO-8859-1\r\n";
+							mail($to, $subject, $body, $headers);
+		        }
+		      $sql_note="MESSAGE FROM CUSTOMER: $clean_email_message";
+		      $sql="INSERT INTO repair_order_history (date_added, repair_order_id, type, note) VALUES (NOW(), $cookie_vo_ro_id, 'C', '$sql_note')";
+		      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+		      $message="<p>Your email message has been sent to your Service Advisor and added to the Repair Notes.</p>";
+		      $email_message="";
+		      $sql="UPDATE repair_order SET unread_customer_msg='X' WHERE id=$cookie_vo_ro_id LIMIT 1";
+		      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+//				}
+    }
+
+  if (($provide_feedback) && ($feedback_message))
+    {
+      $create_sign_on_note=FALSE;
+      $clean_feedback_message=mysql_real_escape_string($feedback_message);
+//      if (BannedWordFound($clean_email_message))
+//      	{
+//				}
+//			else
+//				{
+		      if ($spa_email)
+		        {
+				      $from="MyRepairTracker.com Shop Talk <shoptalk@myrepairtracker.com>";
+							include "includes/standard_email_top.php";
+							$body .= "
+<h2>A Note from My Repair Tracker</h2>
+<div style=\"border: 1px solid black; background-color: white; padding-top: 10px; padding-right: 10px; padding-bottom: 10px; padding-left: 10px; width: 50%\">
+<p><b>To:</b> $spa_name</p>
+<p><b>Repair Order Number:</b> $repair_order_number</p>
+<p><b>Vehicle Owner Last Name:</b> $vehicle_owner_last_name</p>
+<p>$clean_feedback_message</p></p>";
+							if ($sp_logo_name) {
+								$body .= "<img src=\"http://www.myrepairtracker.com/getlogo.html?lookup_id=$cookie_sp_id\" /><br />";
+							}
+							$body .= "<i>$sp_co_name</i></p>";
+							include "includes/standard_email_bottom.php";
+							$to=$spa_name." <".$spa_email.">";
+							$subject="Keeping You Informed";
+							$headers = "From: $from\r\n";
+							$headers .= "MIME-Version: 1.0\r\n";
+							$headers .= "Content-Type: text/html; charset=ISO-8859-1\r\n";
+							mail($to, $subject, $body, $headers);
+		        }
+		      if ($lookup_feedback_contact_email)
+		      	{
+							include "includes/standard_email_top.php";
+							$body .= "
+<h2>A Note from My Repair Tracker</h2>
+<div style=\"border: 1px solid black; background-color: white; padding-top: 10px; padding-right: 10px; padding-bottom: 10px; padding-left: 10px; width: 50%\">
+<p><b>To:</b> $spa_name</p>
+<p><b>Repair Order Number:</b> $repair_order_number</p>
+<p><b>Vehicle Owner Last Name:</b> $vehicle_owner_last_name</p>
+<p>$clean_feedback_message</p></p>";
+							if ($sp_logo_name) {
+								$body .= "<img src=\"http://www.myrepairtracker.com/getlogo.html?lookup_id=$cookie_sp_id\" /><br />";
+							}
+							$body .= "<i>$sp_co_name</i></p>";
+							include "includes/standard_email_bottom.php";
+		          $to=$lookup_feedback_contact_email;
+							$subject="Keeping You Informed";
+							$headers = "From: $from\r\n";
+							$headers .= "MIME-Version: 1.0\r\n";
+							$headers .= "Content-Type: text/html; charset=ISO-8859-1\r\n";
+							mail($to, $subject, $body, $headers);
+		      	}
+		      $sql_note="CUSTOMER FEEDBACK: $clean_feedback_message";
+		      $sql="INSERT INTO repair_order_history (date_added, repair_order_id, type, note) VALUES (NOW(), $cookie_vo_ro_id, 'F', '$sql_note')";
+		      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+		      $message="<p>Thank you for your Feedback.</p>";
+		      $feedback_message="";
+		      $sql="UPDATE repair_order SET unread_feedback_msg='X' WHERE id=$cookie_vo_ro_id LIMIT 1";
+		      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+//		    }
+		}
+
+  if ($update_preferences)
+    {
+      if ($new_vehicle_owner_primary_email && !ValidEmail($new_vehicle_owner_primary_email))
+        {
+          $message="That email address ($new_vehicle_owner_primary_email) was not valid. No changes were made.";
+        }
+      else
+        {
+          if ($vehicle_owner_email_allowed=="N") $new_vehicle_owner_primary_email="";
+          $sql="UPDATE repair_order SET vehicle_owner_email_allowed='$vehicle_owner_email_allowed', vehicle_owner_primary_email='$new_vehicle_owner_primary_email'";
+          if ($lookup_sms_allowed=="Y") $sql.=", vehicle_owner_texting_allowed='$vehicle_owner_texting_allowed', vehicle_owner_secondary_phone='$vehicle_owner_secondary_phone', carrier_id='$carrier_id'";
+          $sql.=" WHERE id=$cookie_vo_ro_id LIMIT 1";
+          $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+          $message.="<p>Your notification preferences have been updated.</p>";
+          $new_vehicle_owner_primary_email="";
+        }
+    }
+
+  $vo_sql="SELECT * FROM repair_order WHERE id=$cookie_vo_ro_id LIMIT 1";
+  $vo_result=mysql_query($vo_sql,$db) or die (mysql_error()."<br>SQL= ".$vo_sql);
+  if ($vo_row=mysql_fetch_array($vo_result))
+    {
+      $repair_order_number=$vo_row["repair_order_number"];
+      $repair_order_open_or_close=$vo_row["status"];
+      $status="No status available";
+      if ($vo_row["damage_assessment"]=="TL")
+        {
+          $status="Total Loss";
+        }
+      elseif ($vo_row["vehicle_gone"])
+        {
+          $status="Car Gone ".$vo_row["vehicle_gone_date"];
+        }
+      elseif ($vo_row["service_status_9"]=="X")
+        {
+          $status="Ready for Pick-Up";
+        }
+      elseif ($vo_row["ro_service_status"]=="9.0")
+        {
+          $status="Ready for Pick-Up";
+        }
+      else
+        {
+          $status_sql="SELECT note FROM repair_order_history WHERE (repair_order_id=$cookie_vo_ro_id) AND (type='A') ORDER BY id DESC LIMIT 1";
+          $status_result=mysql_query($status_sql,$db) or die (mysql_error()."<br>SQL= ".$status_sql);
+          if ($status_row=mysql_fetch_array($status_result))
+            {
+              $status=$status_row["note"];
+              if ($status=='RO added from Appointment')
+              	{
+              	}
+              elseif ($status=='Opted out from email messaging')
+              	{
+              	}
+              else
+                {
+                  $starting_pos=strpos($status,":");
+                  $starting_pos+=1;
+                  $status=substr($status,$starting_pos);
+                  $status=str_replace(" --> ", ":<br>", $status);
+//                  $status=str_replace("Staged in ", "", $status);
+//                  $status=str_replace(" (Customer has been notified via e-mail.)", "", $status);
+//                  $status=str_replace(" Process", "", $status);
+//                  $status=str_replace(" Repair Authorization --> ", "", $status);
+//                  $status=str_replace(" Insurance Authorized --> ", "", $status);
+                }
+            }
+        }
+      $report_card_completed=$vo_row["report_card_completed"];
+      $report_card_token=$vo_row["report_card_token"];
+      $date_added=substr($vo_row["date_added"] ,5 ,2)."-".substr($vo_row["date_added"], 8, 2)."-".substr($vo_row["date_added"], 2, 2);
+      $service_provider_advisor_id=$vo_row["service_provider_advisor_id"];
+      $vehicle_owner_first_name=$vo_row["vehicle_owner_first_name"];
+      $vehicle_owner_last_name=$vo_row["vehicle_owner_last_name"];
+      $vehicle_owner_primary_phone=$vo_row["vehicle_owner_primary_phone"];
+      $vehicle_owner_secondary_phone=$vo_row["vehicle_owner_secondary_phone"];
+      $carrier_id=$vo_row["carrier_id"];
+      if (!$new_vehicle_owner_primary_email) $new_vehicle_owner_primary_email=$vo_row["vehicle_owner_primary_email"];
+      $vehicle_owner_email_allowed=$vo_row["vehicle_owner_email_allowed"];
+      $vehicle_owner_texting_allowed=$vo_row["vehicle_owner_texting_allowed"];
+      $vehicle_year=$vo_row["vehicle_year"];
+      $vehicle_make_id=$vo_row["vehicle_make_id"];
+      $vehicle_model=$vo_row["vehicle_model"];
+      $vehicle_mileage=$vo_row["vehicle_mileage"];
+      $vehicle_insurance_id=$vo_row["vehicle_insurance_id"];
+      $damage_assessment=$vo_row["damage_assessment"];
+      if ($damage_assessment=='R')
+        {
+          $damage_assessment='REPAIRABLE';
+        }
+      elseif ($damage_assessment=='TL')
+        {
+          $damage_assessment='TOTAL LOSS';
+        }
+      elseif ($damage_assessment=='')
+        {
+          $damage_assessment='NOT YET ASSESSED';
+        }
+      $vehicle_damage_id=$vo_row["vehicle_damage_id"];
+      $vehicle_service_id=$vo_row["vehicle_service_id"];
+      $prior_damage_details=$vo_row["prior_damage_details"];
+      $preliminary_repair_amount=$vo_row["preliminary_repair_amount"];
+      $revised_repair_amount=$vo_row["revised_repair_amount"];
+      $multi_point_inspection=$vo_row["multi_point_inspection"];
+
+/*---------------------------------------------------------------*
+ * 2Q 2007 Change: Show dates as mm-dd-yy instead of mm-dd-yyyy. *
+ *---------------------------------------------------------------*/
+      $scheduled_completion_date="&nbsp;";
+      if ($vo_row["scheduled_completion_date"]!="0000-00-00") $scheduled_completion_date=
+      substr($vo_row["scheduled_completion_date"] ,5 ,2)."-".substr($vo_row["scheduled_completion_date"], 8, 2)."-".substr($vo_row["scheduled_completion_date"], 2, 2);
+
+      $revised_completion_date="&nbsp;";
+      if ($vo_row["revised_completion_date"]!="0000-00-00") $revised_completion_date=
+      substr($vo_row["revised_completion_date"] ,5 ,2)."-".substr($vo_row["revised_completion_date"], 8, 2)."-".substr($vo_row["revised_completion_date"], 2, 2);
+
+      $repair_order_service_status_date_added[1]="&nbsp;";
+      if ($vo_row["service_status_date_1"]!="0000-00-00") $repair_order_service_status_date_added[1]=
+      substr($vo_row["service_status_date_1"] ,5 ,2)."-".substr($vo_row["service_status_date_1"], 8, 2)."-".substr($vo_row["service_status_date_1"], 2, 2);
+
+      $repair_order_service_status_date_added[2]="&nbsp;";
+      if ($vo_row["service_status_sub_step_date_2"]!="0000-00-00") $repair_order_service_status_date_added[2]=
+      substr($vo_row["service_status_sub_step_date_2"] ,5 ,2)."-".substr($vo_row["service_status_sub_step_date_2"], 8, 2)."-".substr($vo_row["service_status_sub_step_date_2"], 2, 2);
+
+      $repair_order_service_status_date_added[3]="&nbsp;";
+      if ($vo_row["service_status_sub_step_date_3"]!="0000-00-00") $repair_order_service_status_date_added[3]=
+      substr($vo_row["service_status_sub_step_date_3"] ,5 ,2)."-".substr($vo_row["service_status_sub_step_date_3"], 8, 2)."-".substr($vo_row["service_status_sub_step_date_3"], 2, 2);
+
+      $repair_order_service_status_date_added[4]="&nbsp;";
+      if ($vo_row["service_status_sub_step_date_4"]!="0000-00-00") $repair_order_service_status_date_added[4]=
+      substr($vo_row["service_status_sub_step_date_4"] ,5 ,2)."-".substr($vo_row["service_status_sub_step_date_4"], 8, 2)."-".substr($vo_row["service_status_sub_step_date_4"], 2, 2);
+
+      $repair_order_service_status_date_added[5]="&nbsp;";
+      if ($vo_row["service_status_sub_step_date_5"]!="0000-00-00") $repair_order_service_status_date_added[5]=
+      substr($vo_row["service_status_sub_step_date_5"] ,5 ,2)."-".substr($vo_row["service_status_sub_step_date_5"], 8, 2)."-".substr($vo_row["service_status_sub_step_date_5"], 2, 2);
+
+      $repair_order_service_status_date_added[6]="&nbsp;";
+      if ($vo_row["service_status_sub_step_date_6"]!="0000-00-00") $repair_order_service_status_date_added[6]=
+      substr($vo_row["service_status_sub_step_date_6"] ,5 ,2)."-".substr($vo_row["service_status_sub_step_date_6"], 8, 2)."-".substr($vo_row["service_status_sub_step_date_6"], 2, 2);
+
+      $repair_order_service_status_date_added[7]="&nbsp;";
+      if ($vo_row["service_status_sub_step_date_7"]!="0000-00-00") $repair_order_service_status_date_added[7]=
+      substr($vo_row["service_status_sub_step_date_7"] ,5 ,2)."-".substr($vo_row["service_status_sub_step_date_7"], 8, 2)."-".substr($vo_row["service_status_sub_step_date_7"], 2, 2);
+
+      $repair_order_service_status_date_added[8]="&nbsp;";
+      if ($vo_row["service_status_sub_step_date_8"]!="0000-00-00") $repair_order_service_status_date_added[8]=
+      substr($vo_row["service_status_sub_step_date_8"] ,5 ,2)."-".substr($vo_row["service_status_sub_step_date_8"], 8, 2)."-".substr($vo_row["service_status_sub_step_date_8"], 2, 2);
+
+      $repair_order_service_status_date_added[9]="&nbsp;";
+      if ($vo_row["service_status_date_9"]!="0000-00-00") $repair_order_service_status_date_added[9]=
+      substr($vo_row["service_status_date_9"] ,5 ,2)."-".substr($vo_row["service_status_date_9"], 8, 2)."-".substr($vo_row["service_status_date_9"], 2, 2);
+
+      $spa_sql="SELECT * FROM user WHERE user_id=$service_provider_advisor_id LIMIT 1";
+      $spa_result=mysql_query($spa_sql,$db) or die (mysql_error()."<br>SQL= ".$spa_sql);
+      if ($spa_row=mysql_fetch_array($spa_result))
+        {
+          $spa_first_name=$spa_row["user_first_name"];
+          $spa_last_name=$spa_row["user_last_name"];
+          $spa_name=$spa_first_name." ".$spa_last_name;
+          $spa_email=$spa_row["user_email"];
+          $spa_ext=$spa_row["user_phone_extension"];
+        }
+      $make_sql="SELECT * FROM vehicle_make WHERE id=$vehicle_make_id LIMIT 1";
+      $make_result=mysql_query($make_sql,$db) or die (mysql_error()."<br>SQL= ".$make_sql);
+      if ($make_row=mysql_fetch_array($make_result))
+        {
+          $vehicle_make=$make_row["make"];
+        }
+      $insurance_sql="SELECT * FROM vehicle_insurance WHERE id=$vehicle_insurance_id LIMIT 1";
+      $insurance_result=mysql_query($insurance_sql,$db) or die (mysql_error()."<br>SQL= ".$insurance_sql);
+      if ($insurance_row=mysql_fetch_array($insurance_result))
+        {
+          $insurance=$insurance_row["insurance"];
+        }
+      $damage_sql="SELECT * FROM vehicle_damage WHERE id=$vehicle_damage_id LIMIT 1";
+      $damage_result=mysql_query($damage_sql,$db) or die (mysql_error()."<br>SQL= ".$damage_sql);
+      if ($damage_row=mysql_fetch_array($damage_result))
+        {
+          $damage=$damage_row["damage"];
+        }
+      $today=date("Y-m-d");
+      $note_sql="SELECT COUNT(*) AS duplicate FROM repair_order_history WHERE note LIKE 'CUSTOMER SIGNED ON%' AND date_added LIKE '$today%' AND repair_order_id=$cookie_vo_ro_id";
+      $note_result=mysql_query($note_sql,$db) or die (mysql_error()."<br>SQL= ".$note_sql);
+      $note_row=mysql_fetch_array($note_result);
+      $note_check=$note_row["duplicate"];
+      if ($note_check==0)
+        {
+          $sql_note="CUSTOMER SIGNED ON: Customer has checked their vehicle repair status.";
+          $sql="INSERT INTO repair_order_history (date_added,repair_order_id,type,note) VALUES (NOW(),$cookie_vo_ro_id,'S','$sql_note')";
+          $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+        }
+      $sql="UPDATE repair_order SET date_customer_status_checked=NOW(), customer_page_count=customer_page_count+1 WHERE id=$cookie_vo_ro_id LIMIT 1";
+      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+
+      $today=date("Ymd");
+      $sql="SELECT COUNT(*) AS found_it FROM service_provider_customer_page_count WHERE date=$today AND service_provider_id=$lookup_id";
+      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+      $row=mysql_fetch_array($result);
+      if ($row["found_it"])
+        {
+          $sql="UPDATE service_provider_customer_page_count SET page_count=page_count+1 WHERE date=$today AND service_provider_id=$lookup_id LIMIT 1";
+        }
+      else
+        {
+          $sql="INSERT INTO service_provider_customer_page_count (service_provider_id, date, page_count) VALUES ($lookup_id, $today, 1)";
+        }
+      $result=mysql_query($sql,$db) or die (mysql_error()."<br>SQL= ".$sql);
+    }
+  else
+    {
+      echo "Repair Order record not found for id=$cookie_vo_ro_id<br>";
+      header("Location: $BASE_HREF");
+    }
+  $show_banner=TRUE;
+  $check_for_logo=TRUE;
+  $include_counter=TRUE;
+  $include_greybox=TRUE;
+  $page_heading="$vehicle_owner_first_name $vehicle_owner_last_name - $vehicle_year $vehicle_make $vehicle_model";
+  include "includes/header_vo.html";
+  
+echo '<table width="100%" border="0" cellspacing="0" cellpadding="0"><tr><td>';
+
+	if ($lookup_show_customer_online_estimate=="Y")
+		{
+		  echo "<h2>Repair Order Summary | <a href=\"ro_vo_estimate.html\">Estimate Details</a></h2>";
+		}
+
+  if (strlen($lookup_wizard_url)>0)
+    {
+      echo "<p class=\"wizard_url\">Do you have questions about your auto claim? Check out our <a href=\"$lookup_wizard_url\" target=\"_blank\">Auto Claims Wizard</a>.</p>";
+    }
+  if (($repair_order_open_or_close=="C") && ($report_card_completed=="N"))
+    {
+      echo "<p class=\"wizard_url\">How did we do? <a href=\"".$BASE_HREF."report_card/?ro_id=$cookie_vo_ro_id=&amp;report_card_token=$report_card_token\">Let us know!</a></p>";
+    }
+  if ($message) echo $message;
+?>  
+ 
+</td><td>
+  
+<link rel="stylesheet" type="text/css" href="_css/vehiclephoto.css" media="screen">
+<?php
+echo '<div class="containImages">';
+$id = $cookie_vo_ro_id;
+$type = 'r';
+$user = 'c';
+include('getimages.php');
+echo '</div>';
+?>
+<script type="text/javascript" src="/_js/vehiclephoto.js"></script>
+</td></tr></table>
+
+<table border="0" style="border-collapse: collapse" width="50%" align="right">
+  <tr>
+    <td valign="top" rowspan="<?php echo $rowspan;?>" width="5%">&nbsp;</td>
+    <td width="95%">
+      <fieldset style="padding: 2">
+        <legend>Targeted Delivery Date</legend>
+        <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td class="form_label" valign="top" width="60%">Scheduled Target Completion Date:</td>
+            <td class="bold red" valign="top" width="40%"><?php echo $scheduled_completion_date;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top">Revised Target Completion Date:</td>
+            <td class="bold red" valign="top"><?php echo $revised_completion_date;?></td>
+          </tr>
+          <tr>
+          <td class="smallest" colspan="2" valign="top" width="100%">PLEASE NOTE: The Target Completion Dates are only estimated dates and are subject to change.</td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+  <tr>
+    <td width="95%">
+      <fieldset style="padding: 2">
+        <legend>Update Notification Preferences</legend>
+        <form method="POST" action="<?php echo $PHP_SELF;?>">
+          <input name="repair_order_number" type="hidden" value="<?php echo $repair_order_number;?>">
+          <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+            <tr>
+              <td class="form_label" valign="top">Via Email:</td>
+              <td valign="top"><label for="email_y"><input type="radio" class="radio" name="vehicle_owner_email_allowed" id="email_y" value="Y"<?php if ($vehicle_owner_email_allowed=="Y") echo " checked";?>> Yes, contact me via Email</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">&nbsp;</td>
+              <td valign="top"><label for="email_n"><input type="radio" class="radio" name="vehicle_owner_email_allowed" id="email_n" value="N"<?php if ($vehicle_owner_email_allowed=="N") echo " checked";?>> No, <b>DO NOT</b> contact me via Email</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">Email Address:</td>
+              <td valign="top"><input name="new_vehicle_owner_primary_email" size="40" type="text" value="<?php echo $new_vehicle_owner_primary_email;?>"></td>
+            </tr>
+<?php
+  if ($lookup_sms_allowed=="Y")
+    {
+?>
+            <tr>
+              <td class="form_label" valign="top">Via Text:</td>
+              <td valign="top"><label for="text_y"><input type="radio" class="radio" name="vehicle_owner_texting_allowed" id="text_y" value="Y"<?php if ($vehicle_owner_texting_allowed=="Y") echo " checked";?>> Yes, contact me via Text</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">&nbsp;</td>
+              <td><label for="text_n"><input type="radio" class="radio" name="vehicle_owner_texting_allowed" id="text_n" value="N"<?php if ($vehicle_owner_texting_allowed=="N") echo " checked";?>> No, DO NOT contact me via Text</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">Cell Phone/Carrier:</td>
+              <td valign="top"><input type="text" id="vehicle_owner_secondary_phone" class="formatPhone10" name="vehicle_owner_secondary_phone" size="20" maxlength="25" value="<?php echo $vehicle_owner_secondary_phone;?>" ><?php echo SelectCarrier($carrier_id, "carrier_id", ""); ?></td>
+            </tr>
+<?php
+    }
+?>
+            <tr>
+              <td align="center" colspan="2"><input type="submit" class="button" value="Update" name="update_preferences"></td>
+          </table>
+        </form>
+      </fieldset>
+    </td>
+  </tr>
+<?php
+  if ($lookup_customer_connect=="Y" && $lookup_mpi_status=="A")
+    {
+?>
+  <tr>
+    <td width="95%">
+      <fieldset style="padding: 2">
+        <legend>Multi-Point Safety Inspection</legend>
+<?php
+  if ($multi_point_inspection=="N")
+    {
+      if ($repair_order_open_or_close=="O")
+        {
+?>
+        <form method="POST" action="<?php echo $PHP_SELF;?>">
+          <input name="repair_order_number" type="hidden" value="<?php echo $repair_order_number;?>">
+          <input name="spa_name" type="hidden" value="<?php echo $spa_name;?>">
+          <input name="spa_email" type="hidden" value="<?php echo $spa_email;?>">
+          <input name="spa_ext" type="hidden" value="<?php echo $spa_ext;?>">
+          <input name="vehicle_owner_last_name" type="hidden" value="<?php echo $vehicle_owner_last_name;?>">
+          <p><img src="images/free.gif" title="FREE Multi-Point Inspection" border="0" height="75" width="75" style="float: left;margin-right: 10px;"><label for="multi_point_inspection"><input type="checkbox" class="checkbox" name="multi_point_inspection" id="multi_point_inspection" value="Y"<?php if ($multi_point_inspection=="Y") echo " checked";?>>Would
+           you like a <b>FREE</b> Multi-Point Safety Inspection while your car is in the shop
+           for repairs? If so, simply click the checkbox and then click the
+           Update button below to inform your Service Advisor.</label></p>
+          <p align="center"><input type="submit" class="button" value="Update" name="update_mpi"></p>
+        </form>
+<?php
+        }
+      else
+        {
+          echo "<p><img src=\"images/free.gif\" title=\"FREE Multi-Point Inspection\" border=\"0\" height=\"75\" width=\"75\" style=\"float: left;margin-right: 10px;\">The next time your vehicle is in our shop ask about our FREE Multi-Point Inspection!</p>\n";
+        }
+    }
+  elseif ($multi_point_inspection=="Y")
+    {
+      if ($repair_order_open_or_close=="O")
+        {
+?>
+  <p>Your <b>FREE</b> Multi-Point Safety Inspection has been requested.</p>
+<?php
+        }
+      else
+        {
+          echo "<p><img src=\"images/free.gif\" title=\"FREE Multi-Point Inspection\" border=\"0\" height=\"75\" width=\"75\" style=\"float: left;margin-right: 10px;\">The next time your vehicle is in our shop ask about our FREE Multi-Point Inspection!</p>\n";
+        }
+    }
+?>
+      </fieldset>
+    </td>
+  </tr>
+<?php
+    }
+?>
+  <tr>
+    <td width="95%">
+      <fieldset style="padding: 2">
+        <legend>Talk to Shop</legend>
+        <table border="0" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td valign="top" width="100%">
+              <p>Complete the form below to send an email to your Service Advisor.</p>
+              <form method="POST" action="<?php echo $PHP_SELF;?>">
+                <input name="repair_order_number" type="hidden" value="<?php echo $repair_order_number;?>">
+                <input name="spa_name" type="hidden" value="<?php echo $spa_name;?>">
+                <input name="spa_email" type="hidden" value="<?php echo $spa_email;?>">
+                <input name="spa_ext" type="hidden" value="<?php echo $spa_ext;?>">
+                <input name="vehicle_owner_last_name" type="hidden" value="<?php echo $vehicle_owner_last_name;?>">
+                <p align="center"><textarea rows="4" name="email_message" style="width: 95%;" onKeyDown="textCounter(this.form.email_message,this.form.email_message_len,300);" onKeyUp="textCounter(this.form.email_message,this.form.email_message_len,300);"></textarea><br>
+                <input readonly class="form_readonly" type="text" name="email_message_len" value="300 characters left" size="20"><br>
+                <input type="submit" class="button" value="Send Message" name="send_message"><br>&nbsp;</p>
+              </form>
+            </td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+  <tr>
+    <td width="95%">
+      <fieldset style="padding: 2">
+        <legend>How Are We Doing?</legend>
+        <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td valign="top" width="100%">
+              <p>We value your feedback. Please comment on how we can better serve you.</p>
+              <form method="POST" action="<?php echo $PHP_SELF;?>">
+                <input name="repair_order_number" type="hidden" value="<?php echo $repair_order_number;?>">
+                <input name="spa_name" type="hidden" value="<?php echo $spa_name;?>">
+                <input name="spa_email" type="hidden" value="<?php echo $spa_email;?>">
+                <input name="spa_ext" type="hidden" value="<?php echo $spa_ext;?>">
+                <input name="vehicle_owner_last_name" type="hidden" value="<?php echo $vehicle_owner_last_name;?>">
+                <p align="center"><textarea rows="4" name="feedback_message" style="width: 95%;" onKeyDown="textCounter(this.form.feedback_message,this.form.feedback_message_len,300);" onKeyUp="textCounter(this.form.feedback_message,this.form.feedback_message_len,300);"></textarea><br>
+                <input readonly class="form_readonly" type="text" name="feedback_message_len" value="300 characters left" size="20"><br>
+                <input type="submit" class="button" value="Provide Feedback" name="provide_feedback"><br>&nbsp;</p>
+              </form>
+            </td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+
+  <tr>
+    <td width="95%">
+      <fieldset style="padding: 2">
+        <legend>Customer Repair Status &amp; Message Center</legend>
+          <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+            <tr>
+              <td valign="top" width="50%">
+<?php
+  $history_sql="SELECT * FROM repair_order_history WHERE (repair_order_id=$cookie_vo_ro_id) AND ((type='A') OR (type='C') OR (type='E') OR (type='O')) ORDER BY id DESC";
+  $history_result=mysql_query($history_sql,$db) or die (mysql_error()."<br>SQL= ".$history_sql);
+  if ($history_row=mysql_fetch_array($history_result))
+    {
+      $prev_date=substr($history_row['date_added'],5,2)."-".substr($history_row['date_added'],8,2)."-".substr($history_row['date_added'],0,4);
+      do
+        {
+          $history_type=$history_row['type'];
+          $history_date_added=$history_row['date_added'];
+          $history_date=substr($history_date_added,5,2)."-".substr($history_date_added,8,2)."-".substr($history_date_added,0,4);
+          $history_date_time=date("m-d-y g:i a", mktime(substr($history_date_added,11,2), substr($history_date_added,14,2), 0, substr($history_date_added,5,2), substr($history_date_added,8,2), substr($history_date_added,0,4)));
+          $history_date_time.=" CT";
+          $history_note=stripslashes($history_row['note']);
+          $history_note=str_replace("MESSAGE TO CUSTOMER", "MESSAGE FROM YOUR ADVISOR", $history_note);
+          $history_note=str_replace("EMAIL TO CUSTOMER", "MESSAGE FROM YOUR ADVISOR", $history_note);
+          $history_note=str_replace("MESSAGE FROM CUSTOMER", "MESSAGE TO YOUR ADVISOR", $history_note);
+          $history_note=str_replace("Trim", "Reassembly", $history_note);
+          $history_note=str_replace("trim", "reassembly", $history_note);
+//					if (BannedWordFound($history_note))
+//						{
+//						}
+//					else
+//						{
+		          if ($history_date!=$prev_date)
+		            {
+		              $prev_date=$history_date;
+		              echo "<hr>\n";
+		            }
+		          $class="blue";
+		          if ($history_type=="E") $class="red";
+		          if ($history_type=="C") $class="green";
+		          echo "<p class=\"$class\"><span class=\"bold\">$history_date_time</span> - $history_note</p>\n";
+//						}
+        } while ($history_row=mysql_fetch_array($history_result));
+    }
+  else
+    {
+      echo "<p align=\"center\"><span class=\"bold\">*** NO REPAIR NOTES ***</span></p>\n";
+    }
+?>
+            </td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+</table>
+<table border="0" style="border-collapse: collapse" width="50%">
+  <tr>
+    <td>
+      <fieldset style="padding: 2">
+        <legend>Shop Details</legend>
+        <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td class="form_label" valign="top" width="50%">Company Name:</td>
+            <td valign="top" width="50%">
+<?php
+	if ($lookup_company_url)
+		{
+			echo "<a href=\"http://$lookup_company_url\">$lookup_company_name</a>";
+		}
+	else
+		{
+			echo $lookup_company_name;
+		}
+?>
+						</td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Company Address:</td>
+            <td valign="top" width="50%">
+<?php
+  echo $lookup_company_address_line_1."<br>\n";
+  if (strlen($lookup_company_address_line_2)>0) echo $lookup_company_address_line_2."<br>\n";
+  echo $lookup_company_city." ".$lookup_company_state." ".$lookup_company_zip_code."<br>\n";
+?>
+            </td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Operating Hours:</td>
+            <td valign="top" width="50%"><?php echo $lookup_company_operating_hours;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Phone Number:</td>
+            <td valign="top" width="50%"><?php echo "<a href=\"tel:$lookup_company_phone\">$lookup_company_phone</a>";?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Service Advisor:</td>
+            <td valign="top" width="50%"><?php echo $spa_name; if ($spa_ext) echo " (Ext. $spa_ext)";?></td>
+          </tr>
+					<tr>
+						<td class="form_label" valign="top" width="50%">&nbsp;</td>
+						<td>
+<?php
+	$google_map_link=$lookup_company_address_line_1."+".$lookup_company_city."+".$lookup_company_state."+".$lookup_company_zip_code;
+	$google_map_link=str_replace(" ", "+", $google_map_link);
+	echo "<a href=\"http://maps.google.com/maps?q=$google_map_link\" target=\"_blank\" title=\"Show Shop on Google Maps\"><img src=\"images/google_maps.jpg\" style=\"border: 1px solid black\"></a>";
+?>
+						</td>
+					</tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <fieldset style="padding: 2">
+        <legend>Repair Order Details</legend>
+        <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td class="form_label" valign="top" width="50%">Repair Order Number:</td>
+            <td valign="top" width="50%"><?php echo $repair_order_number;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Date Opened:</td>
+            <td valign="top" width="50%"><?php echo $date_added;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Status:</td>
+            <td valign="top" width="50%" class="red"><b><?php echo $status;?></b></td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <fieldset style="padding: 2">
+        <legend>Owner &amp; Vehicle Details</legend>
+        <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td class="form_label" valign="top" width="50%">Owner:</td>
+            <td valign="top" width="50%"><?php echo $vehicle_owner_first_name." ".$vehicle_owner_last_name;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Vehicle Year:</td>
+            <td valign="top" width="50%"><?php echo $vehicle_year;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Vehicle Make:</td>
+            <td valign="top" width="50%"><?php echo $vehicle_make;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Vehicle Model:</td>
+            <td valign="top" width="50%"><?php echo $vehicle_model;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Vehicle Mileage:</td>
+            <td valign="top" width="50%"><?php echo number_format($vehicle_mileage);?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Insurance Company:</td>
+            <td valign="top" width="50%"><?php echo $insurance;?></td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <fieldset style="padding: 2">
+        <legend>Estimate Summary</legend>
+        <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td class="form_label" valign="top" width="50%">Damage Assessment:</td>
+            <td valign="top" width="50%"><?php echo $damage_assessment;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Primary Damage:</td>
+            <td valign="top" width="50%"><?php echo $damage;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Prior Damage Details:</td>
+            <td valign="top" width="50%"><?php echo $prior_damage_details;?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Preliminary Repair Amount:</td>
+            <td valign="top" width="50%"><?php echo number_format($preliminary_repair_amount,2,'.',',');?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Supplement(s):</td>
+            <td valign="top" width="50%"><?php echo number_format($revised_repair_amount,2,'.',',');?></td>
+          </tr>
+<?php
+  $total_repair_amount=number_format(($preliminary_repair_amount + $revised_repair_amount),2,'.',',');
+?>
+          <tr>
+            <td class="form_label" valign="top" width="50%">Total Repair Amount:</td>
+            <td valign="top" width="50%"><?php echo $total_repair_amount;?></td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <fieldset style="padding: 2">
+        <legend>My Repair Status</legend>
+        <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+          <tr>
+            <td class="form_label" valign="top" width="50%">1. Insurance Authorized&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_1.html" rel="gb_page_center[500, 400]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[1];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">2. Parts Ordered&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_2.html" rel="gb_page_center[500, 375]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[2];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">3. In Body/Metal Repair Process&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_3.html" rel="gb_page_center[500, 325]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[3];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">4. In Paint Process&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_4.html" rel="gb_page_center[500, 300]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[4];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">5. Mechanical&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_5.html" rel="gb_page_center[500, 275]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[5];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">6. Reassembly &amp; Trimout&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_6.html" rel="gb_page_center[500, 250]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[6];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">7. Clean-Up Vehicle&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_7.html" rel="gb_page_center[500, 200]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[7];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">8. Quality Assurance&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_8.html" rel="gb_page_center[500, 200]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[8];?></td>
+          </tr>
+          <tr>
+            <td class="form_label" valign="top" width="50%">9. Ready for Pick-Up&nbsp;<a title="What does this repair status mean?" href="help/ro_vo_help_9.html" rel="gb_page_center[500, 200]"><img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?"></a>&nbsp;</td>
+            <td valign="top" width="50%"><?php echo $repair_order_service_status_date_added[9];?></td>
+          </tr>
+          <tr>
+            <td align="center" colspan="2" valign="top" width="100%">Click the&nbsp;<img border="0" src="images/help.gif" width="11" height="11" alt="What does this repair status mean?">&nbsp; for an explanation of a repair status.</td>
+          </tr>
+        </table>
+      </fieldset>
+    </td>
+  </tr>
+</table>
+<?php
+  include "includes/footer.php";
+?>

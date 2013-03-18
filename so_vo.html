@@ -1,0 +1,861 @@
+<?php
+require_once "includes/bootstrap.php";
+
+include "includes/authorize_so_vo.html";
+
+$message = "";
+$create_sign_on_note = TRUE;
+
+if( ($send_message) && (strlen( $email_message ) > 0) ) {
+	$create_sign_on_note = FALSE;
+	$body = "************************************\r\n";
+	$body .= "A Note from  from My Repair Tracker\r\n";
+	$body .= "***********************************\r\n";
+	$body .= "\r\n";
+	$body .= "Repair Order Number: $service_order_number\r\n";
+	$clean_email_message = mysql_real_escape_string( $email_message );
+	$body .= $clean_email_message . "\r\n";
+	$body .= "NOTE: Use the Talk to Customer feature at myrepairtracker.com to reply to the customer. Do not simply reply to this email from your email program because the customer will not receive your reply.\r\n";
+	$body .= "\n\r";
+	$body .= "NOTE: This is an automated email from MyRepairTracker.com. Please do not reply directly to this system-generated email.\n\r";
+	$to = $spa_name . " <" . $spa_email . ">";
+	$from = "MyRepairTracker.com Shop Talk <shoptalk@myrepairtracker.com>";
+	//$subject="Shop Talk RE: RO#$service_order_number ($vehicle_owner_last_name)";
+	$subject = "Keeping You Informed";
+	$headers = "From: $from\r\n";
+	mail( $to, $subject, $body, $headers );
+	$sql_note = "MESSAGE FROM CUSTOMER: $clean_email_message";
+	$sql = "INSERT INTO service_order_history (date_added, service_order_id, type, note) VALUES (NOW(), $cookie_vo_so_id, 'C', '$sql_note')";
+	$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+	$sql = "UPDATE service_order SET unread_customer_msg='X' WHERE id=$cookie_vo_so_id LIMIT 1";
+	$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+	$message = "<p>Your email message has been sent to your Service Advisor and added to the Repair Notes.</p>";
+	$email_message = "";
+}
+
+if( ($provide_feedback) && (strlen( $feedback_message ) > 0) ) {
+	$create_sign_on_note = FALSE;
+	$clean_feedback_message = mysql_real_escape_string( $feedback_message );
+	$sql_note = "CUSTOMER FEEDBACK: $clean_feedback_message";
+	$sql = "INSERT INTO service_order_history (date_added, service_order_id, type, note) VALUES (NOW(), $cookie_vo_so_id, 'F', '$sql_note')";
+	$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+	$sql = "UPDATE service_order SET unread_feedback_msg='X' WHERE id=$cookie_vo_so_id LIMIT 1";
+	$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+	$message = "<p>Thank you for your Feedback.</p>";
+	$email_message = "";
+}
+
+if( $update_preferences ) {
+	if( !$vehicle_owner_email_allowed ) {
+		$vehicle_owner_email_allowed = "N";
+		$new_vehicle_owner_primary_email = "";
+	}
+	if( !$vehicle_owner_texting_allowed )
+		$vehicle_owner_texting_allowed = "N";
+	if( $new_vehicle_owner_primary_email && !ValidEmail( $new_vehicle_owner_primary_email ) ) {
+		$message = "That email address ($new_vehicle_owner_primary_email) was not valid. No changes were made.";
+	} else {
+		if( $vehicle_owner_email_allowed == "N" )
+			$new_vehicle_owner_primary_email = "";
+		$sql = "UPDATE service_order SET vehicle_owner_email_allowed='$vehicle_owner_email_allowed', vehicle_owner_primary_email='$new_vehicle_owner_primary_email', carrier_id='$carrier_id'";
+		if( $lookup_sms_allowed == "Y" ) {
+			$sql .= ", vehicle_owner_texting_allowed='$vehicle_owner_texting_allowed', vehicle_owner_secondary_phone='$vehicle_owner_secondary_phone'";
+		}
+		$sql .= " WHERE id=$cookie_vo_so_id LIMIT 1";
+		$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+		$message .= "<p>Your notification preferences have been updated.</p>";
+		$new_vehicle_owner_primary_email = "";
+	}
+} else {
+	$new_vehicle_owner_primary_email = "";
+}
+
+if( $update_time ) {
+	$create_sign_on_note = FALSE;
+	$sql = "UPDATE service_order SET customer_pu_time='$customer_pu_time' WHERE id=$cookie_vo_so_id LIMIT 1";
+	$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+}
+
+if( $update_status ) {
+	$create_sign_on_note = FALSE;
+	$i = 0;
+	foreach( $part_id as $id ) {
+		if( $customer_pref[$i] != $prev_customer_pref[$i] ) {
+			$sql = "UPDATE service_order_part SET customer_pref='$customer_pref[$i]' WHERE id=$id LIMIT 1";
+			$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+			$note = "";
+			if( ($prev_customer_pref[$i] == "") || ($prev_customer_pref[$i] == "P") ) {
+				if( $customer_pref[$i] == "A" ) {
+					$note = "Customer Repair Authorization: APPROVED $part_number[$i] - $part_desc[$i]";
+				}
+				if( $customer_pref[$i] == "R" ) {
+					$note = "Customer Repair Authorization: DECLINED $part_number[$i] - $part_desc[$i]";
+				}
+			} elseif( $prev_customer_pref[$i] == "R" ) {
+				if( $customer_pref[$i] == "A" ) {
+					$note = "Customer Repair Authorization: APPROVED (WAS DECLINIED): $part_number[$i] - $part_desc[$i]";
+				}
+			} elseif( $prev_customer_pref[$i] == "A" ) {
+				if( $customer_pref[$i] == "R" ) {
+					$note = "Customer Repair Authorization: DECLINED (WAS APPROVED): $part_number[$i] - $part_desc[$i]";
+				}
+			}
+			if( $note ) {
+				$sql = "INSERT INTO service_order_history (date_added, service_order_id, type, note) VALUES (NOW(), $cookie_vo_so_id, 'C', '$note')";
+				$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+			}
+		}
+		$i++;
+	}
+}
+
+$auth_errors=array();
+$auth_error_found=FALSE;
+$auth_message="";
+if( $_POST[update_complaints] ) {
+	$auth_answer_id = $_POST[auth_answer_id];
+	$auth_answer = $_POST[auth_answer];
+	$auth_question_id = $_POST[auth_question_id];
+	$complaints=$_POST[complaints];
+	$service_order_number=$_POST[service_order_number];
+	$spa_id=$_POST[spa_id];
+	$spa_name=$_POST[spa_name];
+	$spa_email=$_POST[spa_email];
+	$spa_email=$_POST[spa_email];
+	$spa_phone=$_POST[spa_phone];
+	$spa_carrier_id=$_POST[spa_carrier_id];
+	//
+	// If there is an authorization answer on file, get it from the db
+	// and compare it to the answer provided. If they match, any updates
+	// are authorized.
+	//
+	if ($auth_answer_id) {
+		$auth_answer_sql = "SELECT answer_text FROM auth_answer WHERE id='$auth_answer_id'";
+		$auth_answer_result = mysql_query( $auth_answer_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $auth_answer_sql );
+		$auth_answer_row = mysql_fetch_array( $auth_answer_result );
+		$auth_answer_text = $auth_answer_row[answer_text];
+		if (!$auth_answer) {
+			$auth_error_found=TRUE;
+			$auth_errors[]="Please provide the answer to your authorization question.";
+		} elseif ($auth_answer <> $auth_answer_text) {
+			$auth_error_found=TRUE;
+			$auth_errors[]="That answer doesn't match the answer on file.";
+		}
+	} else {
+	//
+	// If there is not an authorization answer on file, but the user selected
+	// an authorization question and answered it, any updates are authorized.
+	//
+		if (!$auth_answer_id && $auth_answer && $auth_question_id) {
+		} else {
+			$auth_error_found=TRUE;
+			$auth_errors[]="Please select an authorization question and answer.";
+		}
+	}
+
+	if ($auth_error_found==TRUE) {
+  	$auth_message=FormatErrorDisplay($auth_errors);
+	} else {
+		foreach ($complaints as $complaint_seq => $this_complaint) {
+			if ($this_complaint[status] == "A") {
+				$sql = "UPDATE service_order_complaint SET status='A', approved='Y', date_approved=NOW() WHERE service_order_id='$cookie_vo_so_id' AND seq='$complaint_seq' LIMIT 1;";
+				$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+				$history_note = "WORK AUTHORIZED: " . $this_complaint[complaint];
+				$history_sql = "INSERT INTO service_order_history (date_added, service_order_id, type, note) VALUES (NOW(), $cookie_vo_so_id, 'C', '$history_note')";
+				$history_result = mysql_query( $history_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $history_sql );
+				$message_body = "<p>Vehicle owner has authorized this work: $this_complaint[complaint]</p>";
+				$message_sql = "INSERT INTO message (date_added, to_user_id, to_user_type, subject, service_order_number, body) VALUES (NOW(), '$spa_id', 'user', 'Work Authorized', '$service_order_number', '$message_body');";
+				$message_result = mysql_query( $message_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $message_sql );
+			}
+			if ($this_complaint[status] == "D") {
+				$sql = "UPDATE service_order_complaint SET status='D', date_declined=NOW() WHERE service_order_id='$cookie_vo_so_id' AND seq='$complaint_seq' LIMIT 1;";
+				$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+				$history_note = "WORK DECLINED: " . $this_complaint[complaint];
+				$history_sql = "INSERT INTO service_order_history (date_added, service_order_id, type, note) VALUES (NOW(), $cookie_vo_so_id, 'C', '$history_note')";
+				$history_result = mysql_query( $history_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $history_sql );
+				$message_body = "<p>Vehicle owner has declined this work: $this_complaint[complaint]</p>";
+				$message_sql = "INSERT INTO message (date_added, to_user_id, to_user_type, subject, service_order_number, body) VALUES (NOW(), '$spa_id', 'user', 'Work Authorized', '$service_order_number', '$message_body');";
+				$message_result = mysql_query( $message_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $message_sql );
+			}
+		}
+		if (!$auth_answer_id && $auth_answer && $auth_question_id) {
+			$auth_answer_sql = "INSERT INTO auth_answer (auth_question_id, so_id, answer_text) VALUES ('$auth_question_id', '$cookie_vo_so_id', '$auth_answer')";
+			$auth_answer_result = mysql_query( $auth_answer_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $auth_answer_sql );
+			$history_note = "Authorization question selected";
+			$history_sql = "INSERT INTO service_order_history (date_added, service_order_id, type, note) VALUES (NOW(), $cookie_vo_so_id, 'C', '$history_note')";
+			$history_result = mysql_query( $history_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $history_sql );
+		}
+	}
+}
+
+$vo_sql = "SELECT * FROM service_order WHERE id='$cookie_vo_so_id' LIMIT 1";
+$vo_result = mysql_query( $vo_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $vo_sql );
+if( $vo_row = mysql_fetch_array( $vo_result ) ) {
+	$service_provider_id = $vo_row["service_provider_id"];
+	$service_order_number = $vo_row["service_order_number"];
+	$status = $vo_row["status"];
+	if( $status == "C" ) {
+		$status = 'CLOSED';
+	} else {
+		$status = 'OPENED';
+	}
+	$service_status = $vo_row["service_status"];
+	if( $vo_row["service_status_date"] == "0000-00-00 00:00:00" ) {
+		$service_status_date = "";
+	} else {
+		$service_status_date = substr( $vo_row["service_status_date"], 5, 2 ) . "-" . substr( $vo_row["service_status_date"], 8, 2 ) . "-" . substr( $vo_row["service_status_date"], 2, 2 );
+	}
+	$report_card_completed = $vo_row["report_card_completed"];
+	$report_card_token = $vo_row["report_card_token"];
+	$date_added = substr( $vo_row["date_added"], 5, 2 ) . "-" . substr( $vo_row["date_added"], 8, 2 ) . "-" . substr( $vo_row["date_added"], 2, 2 );
+	$spa_id = $vo_row["service_provider_advisor_id"];
+	$vehicle_owner_first_name = $vo_row["vehicle_owner_first_name"];
+	$vehicle_owner_last_name = $vo_row["vehicle_owner_last_name"];
+	$vehicle_owner_primary_phone = $vo_row["vehicle_owner_primary_phone"];
+	$vehicle_owner_secondary_phone = $vo_row["vehicle_owner_secondary_phone"];
+	$old_vehicle_owner_primary_email = $vo_row["vehicle_owner_primary_email"];
+	$carrier_id = $vo_row["carrier_id"];
+	if( !$new_vehicle_owner_primary_email )
+		$new_vehicle_owner_primary_email = $vo_row["vehicle_owner_primary_email"];
+	$vehicle_owner_email_allowed = $vo_row["vehicle_owner_email_allowed"];
+	$vehicle_owner_texting_allowed = $vo_row["vehicle_owner_texting_allowed"];
+	$vehicle_year = $vo_row["vehicle_year"];
+	$vehicle_make_id = $vo_row["vehicle_make_id"];
+	$vehicle_model = $vo_row["vehicle_model"];
+	$vehicle_vin = $vo_row["vehicle_vin"];
+	$preliminary_repair_amount = $vo_row["preliminary_repair_amount"];
+	$no_estimate = $vo_row["no_estimate"];
+	$supplies_cost = $vo_row["supplies_cost"];
+	$flat_labor_rate = $vo_row["flat_labor_rate"];
+
+	if ($auth_error_found==FALSE) {
+		$complaints=array();
+		/*----------------------------------------------------*
+		 * 4Q 2012 Change: Show complaints for authorization. *
+		 *----------------------------------------------------*/
+		$auth_comp_sql = "SELECT * FROM service_order_complaint WHERE service_order_id=$cookie_vo_so_id ORDER BY seq";
+		$auth_comp_result = mysql_query( $auth_comp_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $auth_comp_sql );
+		if( $auth_comp_row = mysql_fetch_array( $auth_comp_result ) ) {
+			do {
+				$complaint_seq = $auth_comp_row[seq];
+				$complaints[$complaint_seq][status] = $auth_comp_row[status];
+				if ($complaints[$complaint_seq][status]=="O") {
+					$complaints[$complaint_seq][updateable]="Y";
+				} else {
+					$complaints[$complaint_seq][updateable]="N";
+				}
+				$complaints[$complaint_seq][complaint] = $auth_comp_row[complaint];
+				$complaints[$complaint_seq][amount] = $auth_comp_row[amount];
+				if ($auth_comp_row[date_approved] == "0000-00-00 00:00:00") {
+					$complaints[$complaint_seq][date_approved] = "";
+				} else {
+					$complaints[$complaint_seq][date_approved] = substr( $auth_comp_row[date_approved], 5, 2 ) . "-" . substr( $auth_comp_row[date_approved], 8, 2 ) . "-" . substr( $auth_comp_row[date_approved], 2, 2 );
+				}
+				if ($auth_comp_row[date_declined] == "0000-00-00 00:00:00") {
+					$complaints[$complaint_seq][date_declined] = "";
+				} else {
+					$complaints[$complaint_seq][date_declined] = substr( $auth_comp_row[date_declined], 5, 2 ) . "-" . substr( $auth_comp_row[date_declined], 8, 2 ) . "-" . substr( $auth_comp_row[date_declined], 2, 2 );
+				}
+				if ($auth_comp_row[date_completed] == "0000-00-00 00:00:00") {
+					$complaints[$complaint_seq][date_completed] = "";
+				} else {
+					$complaints[$complaint_seq][date_completed] = substr( $auth_comp_row[date_completed], 5, 2 ) . "-" . substr( $auth_comp_row[date_completed], 8, 2 ) . "-" . substr( $auth_comp_row[date_completed], 2, 2 );
+				}
+			} while ($auth_comp_row=mysql_fetch_array($auth_comp_result));
+		}
+
+		/*----------------------------------------------*
+		 * 4Q 2012 Change: Show authorization question. *
+		 *----------------------------------------------*/
+		$auth_quest_sql = "SELECT * FROM auth_answer WHERE so_id='$cookie_vo_so_id' LIMIT 1";
+		$auth_quest_result = mysql_query( $auth_quest_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $auth_quest_sql );
+		if( $auth_quest_row = mysql_fetch_array( $auth_quest_result ) ) {
+			$auth_answer_id = $auth_quest_row[id];
+			$auth_answer = "";
+			$auth_question_id = $auth_quest_row[auth_question_id];
+		} else {
+			$auth_answer_id = 0;
+			$auth_answer = "";
+			$auth_question_id = 0;
+		}
+	}
+
+	/*---------------------------------------------------------------*
+	 * 2Q 2007 Change: Show dates as mm-dd-yy instead of mm-dd-yyyy. *
+	 *---------------------------------------------------------------*/
+	$promise_date = "&nbsp;";
+	if( $vo_row["promise_date"] > 0 )
+		$promise_date = substr( $vo_row["promise_date"], 4, 2 ) . "-" . substr( $vo_row["promise_date"], 6, 2 ) . "-" . substr( $vo_row["promise_date"], 2, 2 );
+
+	$revised_promise_date = "&nbsp;";
+	if( $vo_row["revised_promise_date"] > 0 )
+		$revised_promise_date = substr( $vo_row["revised_promise_date"], 4, 2 ) . "-" . substr( $vo_row["revised_promise_date"], 6, 2 ) . "-" . substr( $vo_row["revised_promise_date"], 2, 2 );
+
+	$customer_pu_time = $vo_row["customer_pu_time"];
+
+	$spa_sql = "SELECT * FROM user WHERE user_id=$spa_id LIMIT 1";
+	$spa_result = mysql_query( $spa_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $spa_sql );
+	if( $spa_row = mysql_fetch_array( $spa_result ) ) {
+		$spa_name = $spa_row["user_first_name"] . " " . $spa_row["user_last_name"];
+		$spa_email = $spa_row["user_email"];
+		$spa_phone = $spa_row["user_phone_number"];
+		$spa_carrier_id = $spa_row["user_carrier_id"];
+	} else {
+		$spa_name = "*** NOT FOUND *** ($spa_id)";
+	}
+
+	$make_sql = "SELECT * FROM vehicle_make WHERE id=$vehicle_make_id LIMIT 1";
+	$make_result = mysql_query( $make_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $make_sql );
+	if( $make_row = mysql_fetch_array( $make_result ) ) {
+		$vehicle_make = $make_row["make"];
+	}
+
+	$service_status_desc = "";
+	if( $service_status ) {
+		$service_status_sql = "SELECT * FROM service_status WHERE shop_type='S' AND id={$service_status} LIMIT 1";
+		$service_status_result = mysql_query( $service_status_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $service_status_sql );
+		if( $service_status_row = mysql_fetch_array( $service_status_result ) ) {
+			$service_status_desc = $service_status_row["description"];
+		} else {
+			$service_status_desc = "*** NOT FOUND *** ($service_status)";
+		}
+	}
+
+	if( $create_sign_on_note == TRUE ) {
+		$sql_note = "CUSTOMER SIGNED ON: Customer has checked their vehicle repair status.";
+		$sql = "INSERT INTO service_order_history (date_added,service_order_id,type,note) VALUES (NOW(),$cookie_vo_so_id,'S','$sql_note')";
+		$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+	}
+
+	$today = date( "Ymd" );
+	$sql = "SELECT COUNT(*) AS found_it FROM service_provider_customer_page_count WHERE date=$today AND service_provider_id=$service_provider_id";
+	$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+	$row = mysql_fetch_array( $result );
+	if( $row["found_it"] ) {
+		$sql = "UPDATE service_provider_customer_page_count SET page_count=page_count+1 WHERE date=$today AND service_provider_id=$service_provider_id LIMIT 1";
+	} else {
+		$sql = "INSERT INTO service_provider_customer_page_count (service_provider_id, date, page_count) VALUES ($service_provider_id, $today, 1)";
+	}
+	$result = mysql_query( $sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $sql );
+} else {
+	echo "Repair Order record not found for id=$cookie_vo_so_id<br>";
+	header( "Location: $BASE_HREF" );
+}
+
+$points = "";
+$point_sql = "SELECT DISTINCT seq_nbr FROM inspection_question WHERE (service_provider_id=$service_provider_id) AND (status='A') ORDER BY seq_nbr DESC";
+$point_result = mysql_query( $point_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $point_sql );
+if( $point_row = mysql_fetch_array( $point_result ) )
+	$points = $point_row["seq_nbr"];
+
+$show_banner = TRUE;
+$check_for_logo = TRUE;
+$include_counter = TRUE;
+$include_help = TRUE;
+$include_greybox = TRUE;
+include "includes/header_vo.html";
+
+echo '<table width="100%" border="0" cellspacing="0" cellpadding="0"><tr><td>';
+
+echo "<h2>$vehicle_owner_first_name $vehicle_owner_last_name - $vehicle_year $vehicle_make $vehicle_model - RO# $service_order_number</h2>\n";
+echo '<h3 style="display:inline-block;">Service Order Details</h3>'."\n";
+
+?>
+ 
+</td><td>
+    
+<link rel="stylesheet" type="text/css" href="_css/vehiclephoto.css" media="screen">
+<?php
+echo '<div class="containImages">';
+$id = $cookie_vo_so_id;
+$type = 's';
+$user = 'c';
+include('getimages.php');
+echo '</div>';
+?>
+<script type="text/javascript" src="/_js/vehiclephoto.js"></script>
+</td></tr></table>
+
+<?php
+
+if( ($status == "CLOSED") && ($report_card_completed == "N") ) {
+	echo "<p class=\"wizard_url\">How did we do? <a href=\"" . $BASE_HREF . "report_card/?so_id=$cookie_vo_so_id&amp;report_card_token=$report_card_token\">Let us know!</a></p>";
+}
+if( $message )
+	echo $message;
+?>
+<table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+  <tr>
+    <td colspan="2" valign="top" width="33%">
+      <fieldset style="padding: 2; height: 200px;">
+        <legend>Shop Details</legend>
+        <table border="0" cellpadding="2" cellspacing="1" style="border-collapse: collapse" width="100%">
+          <tr>
+						<td align="center" rowspan="7">
+<?php
+$google_map_link = $lookup_company_address_line_1 . "+" . $lookup_company_city . "+" . $lookup_company_state . "+" . $lookup_company_zip_code;
+$google_map_link = str_replace( " ", "+", $google_map_link );
+echo "<a href=\"http://maps.google.com/maps?q=$google_map_link\" target=\"_blank\" title=\"Show Shop on Google Maps\"><img src=\"images/google_maps.jpg\" style=\"border: 1px solid black\"></a>";
+$shop_address = "";
+if( $lookup_company_address_line_1 ) {
+	$shop_address = $lookup_company_address_line_1;
+}
+if( $lookup_company_address_line_2 ) {
+	if( $shop_address ) {
+		$shop_address .= "<br>";
+	}
+	$shop_address .= $lookup_company_address_line_2;
+}
+if( $lookup_company_city ) {
+	if( $shop_address ) {
+		$shop_address .= "<br>";
+	}
+	$shop_address .= $lookup_company_city;
+}
+if( $lookup_company_state ) {
+	if( $lookup_company_city ) {
+		$shop_address .= ", ";
+	}
+	$shop_address .= $lookup_company_state;
+}
+if( $lookup_company_zip_code ) {
+	$shop_address .= " " . $lookup_company_zip_code;
+}
+?>
+</td>
+<td class="form_label" valign="top">Company Name:</td>
+<td valign="top"><?php echo $lookup_company_name; ?></td>
+</tr>
+<tr>
+<td class="form_label" valign="top">Company Address:</td>
+<td valign="top"><?php echo $shop_address; ?></td>
+</tr>
+<?php
+if ($lookup_company_operating_hours)
+{
+?>
+<tr>
+<td class="form_label" valign="top">Operating Hours:</td>
+<td valign="top"><?php echo $lookup_company_operating_hours; ?></td>
+</tr>
+<?php
+}
+?>
+<?php
+if ($lookup_company_phone)
+{
+?>
+<tr>
+<td class="form_label" valign="top">Phone Number:</td>
+<td valign="top"><?php echo "<a href=\"tel:$lookup_company_phone\">$lookup_company_phone</a>";?></td>
+</tr>
+<?php
+}
+?>
+<?php
+if ($spa_name)
+{
+?>
+<tr>
+<td class="form_label" valign="top">Advisor:</td>
+<td valign="top"><?php echo $spa_name; ?></td>
+</tr>
+<?php
+}
+?>
+</table>
+</fieldset>
+</td>
+<td colspan="2" valign="top" width="34%">
+<fieldset style="padding: 2; height: 200px;">
+<legend>Target Date and Status</legend>
+<form method="POST" action="<?php echo $PHP_SELF; ?>">
+<table border="0" cellpadding="2" cellspacing="1" style="border-collapse: collapse" width="100%">
+<tr>
+<td class="form_label" valign="top">Scheduled Date:</td>
+<td class="bold red" valign="top"><?php echo $promise_date; ?></td>
+</tr>
+<tr>
+<td class="form_label" valign="top">Revised Date:</td>
+<td class="bold red" valign="top"><?php echo $revised_promise_date; ?></td>
+</tr>
+<tr>
+<td class="form_label" valign="top">Preferred Pick-Up:</td>
+<td valign="middle">
+<?php
+echo PreferredPickUpTime($customer_pu_time, "customer_pu_time", "")
+?>
+</td>
+</tr>
+<tr>
+<td class="form_label" valign="top">Repair Amount:</td>
+<td valign="top">
+<?php
+if( $preliminary_repair_amount > 0 ) {
+	$preliminary_repair_amount = number_format( $preliminary_repair_amount, 2, '.', ',' );
+	echo "$$preliminary_repair_amount";
+} elseif( $no_estimate == "UNK" ) {
+	echo "<span class=\"red bold\">UNK</span>";
+} else {
+	echo "<span class=\"red bold\">$0.00</span>\n";
+}
+?>
+</td>
+</tr>
+<tr>
+<td class="form_label" valign="top">Status:</td>
+<td class="bold red" valign="top"><?php echo $service_status_date . " - " . $service_status_desc; ?></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><input type="submit" class="button" value="Update" name="update_time"></td>
+</tr>
+</table>
+</form>
+</fieldset>
+</td>
+<td colspan="2" valign="top" width="33%">
+      <fieldset style="padding: 2; height: 200px;">
+        <legend>Update Notification Preferences</legend>
+        <form method="POST" action="<?php echo $PHP_SELF;?>">
+          <input name="repair_order_number" type="hidden" value="<?php echo $repair_order_number;?>">
+          <table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+            <tr>
+              <td class="form_label" valign="top">Via Email:</td>
+              <td valign="top"><label for="email_y"><input type="radio" class="radio" name="vehicle_owner_email_allowed" id="email_y" value="Y"<?php if ($vehicle_owner_email_allowed=="Y") echo " checked";?>> Yes, contact me via Email</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">&nbsp;</td>
+              <td valign="top"><label for="email_n"><input type="radio" class="radio" name="vehicle_owner_email_allowed" id="email_n" value="N"<?php if ($vehicle_owner_email_allowed=="N") echo " checked";?>> No, <b>DO NOT</b> contact me via Email</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">Email Address:</td>
+              <td valign="top"><input name="new_vehicle_owner_primary_email" size="40" type="text" value="<?php echo $new_vehicle_owner_primary_email;?>"></td>
+            </tr>
+<?php
+  if ($lookup_sms_allowed=="Y")
+    {
+?>
+            <tr>
+              <td class="form_label" valign="top">Via Text:</td>
+              <td valign="top"><label for="text_y"><input type="radio" class="radio" name="vehicle_owner_texting_allowed" id="text_y" value="Y"<?php if ($vehicle_owner_texting_allowed=="Y") echo " checked";?>> Yes, contact me via Text</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">&nbsp;</td>
+              <td><label for="text_n"><input type="radio" class="radio" name="vehicle_owner_texting_allowed" id="text_n" value="N"<?php if ($vehicle_owner_texting_allowed=="N") echo " checked";?>> No, DO NOT contact me via Text</label></td>
+            </tr>
+            <tr>
+              <td class="form_label" valign="top">Cell Phone/Carrier:</td>
+              <td valign="top"><input type="text" id="vehicle_owner_secondary_phone" class="formatPhone10" name="vehicle_owner_secondary_phone" size="20" maxlength="25" value="<?php echo $vehicle_owner_secondary_phone;?>" ><?php echo SelectCarrier($carrier_id, "carrier_id", ""); ?></td>
+            </tr>
+<?php
+    }
+?>
+            <tr>
+              <td align="center" colspan="2"><input type="submit" class="button" value="Update" name="update_preferences"></td>
+          </table>
+        </form>
+      </fieldset>
+</td>
+</tr>
+</table>
+
+<table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+<tr>
+<td valign="top" width="50%">
+<fieldset style="padding: 2;">
+<legend>Talk to Shop</legend>
+<form method="POST" action="<?php echo $PHP_SELF; ?>">
+<table border="0" cellpadding="2" cellspacing="1" style="border-collapse: collapse" width="100%">
+<tr>
+<td valign="top" width="100%">
+Complete the form below to send an email to your Service Advisor.<br>
+<input name="service_order_number" type="hidden" value="<?php echo $service_order_number; ?>">
+<input name="spa_name" type="hidden" value="<?php echo $spa_name; ?>">
+<input name="spa_email" type="hidden" value="<?php echo $spa_email; ?>">
+<input name="vehicle_owner_last_name" type="hidden" value="<?php echo $vehicle_owner_last_name; ?>">
+<p align="center"><textarea rows="3" name="email_message" style="width: 95%;"></textarea></p>
+</td>
+</tr>
+<tr>
+<td align="center"><input type="submit" class="button" value="Send Message" name="send_message"></td>
+</tr>
+</table>
+</form>
+</fieldset>
+</td>
+<td valign="top" width="50%">
+<fieldset style="padding: 2;">
+<legend>Feedback</legend>
+<form method="POST" action="<?php echo $PHP_SELF; ?>">
+<table border="0" cellpadding="2" cellspacing="1" style="border-collapse: collapse" width="100%">
+<tr>
+<td valign="top" width="100%">
+Complete the form below to provide feedback on how we're doing.<br>
+<input name="service_order_number" type="hidden" value="<?php echo $service_order_number; ?>">
+<input name="spa_name" type="hidden" value="<?php echo $spa_name; ?>">
+<input name="spa_email" type="hidden" value="<?php echo $spa_email; ?>">
+<input name="vehicle_owner_last_name" type="hidden" value="<?php echo $vehicle_owner_last_name; ?>">
+<p align="center"><textarea rows="3" name="feedback_message" style="width: 95%;"></textarea></p>
+</td>
+</tr>
+<tr>
+<td align="center"><input type="submit" class="button" value="Provide Feedback" name="provide_feedback"></td>
+</tr>
+</table>
+</form>
+</fieldset>
+</td>
+</tr>
+</table>
+
+<table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+<tr>
+<td valign="top" width="66%">
+<fieldset style="padding: 2;">
+	<legend>Complaints/Concerns and Authorization</legend>
+<?php
+	if ($auth_message){
+		echo $auth_message;
+	}
+?>
+		<form method="POST" action="<?php echo $PHP_SELF;?>">
+			<input name="service_order_number" type="hidden" value="<?php echo $service_order_number; ?>">
+			<input name="spa_id" type="hidden" value="<?php echo $spa_id; ?>">
+			<input name="spa_name" type="hidden" value="<?php echo $spa_name; ?>">
+			<input name="spa_email" type="hidden" value="<?php echo $spa_email; ?>">
+			<input name="spa_email" type="hidden" value="<?php echo $spa_email; ?>">
+			<input name="spa_phone" type="hidden" value="<?php echo $spa_phone; ?>">
+			<input name="spa_carrier_id" type="hidden" value="<?php echo $spa_carrier_id; ?>">
+			<table align="center" border="0" cellpadding="4" cellspacing="1" style="border-collapse: collapse; border: 1px solid white;">
+				<tr>
+					<th>Status</th>
+					<th>Complaint</th>
+					<th>Amount</th>
+				</tr>
+
+<?php
+	$total=0;
+	foreach ($complaints as $complaint_seq => $complaint) {
+		$total = $total + $complaint[amount];
+		echo "<tr>";
+		echo "<td>";
+		if ($complaint[updateable]=="Y") {
+			echo "<select name=\"complaints[$complaint_seq][status]\">";
+ 			$selected="";
+ 			if ($complaint[status]=="A") {
+ 				$selected="selected=\"selected\"";
+			}
+			echo "<option value=\"A\"$selected>Approved</option>\n";
+ 			$selected="";
+ 			if ($complaint[status]=="D") {
+ 				$selected="selected=\"selected\"";
+			}
+			echo "<option value=\"D\"$selected>Declined</option>\n";
+ 			$selected="";
+ 			if ($complaint[status]=="O") {
+ 				$selected="selected=\"selected\"";
+			}
+			echo "<option value=\"O\"$selected>Open</option>\n";
+			echo "</select>\n";
+		} else {
+			if ($complaint[status]=="A")
+				{
+					echo "Approved";
+					if ($complaint[date_approved]){
+						echo " on " . $complaint[date_approved];
+					}
+					echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][status]\" value=\"$complaint[status]\" />\n";
+				}
+			elseif ($complaint[status]=="D")
+				{
+					echo "Declined";
+					if ($complaint[date_declined]){
+						echo " on " . $complaint[date_declined];
+					}
+					echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][status]\" value=\"$complaint[status]\" />\n";
+				}
+			elseif ($complaint[status]=="C")
+				{
+					echo "Completed";
+					if ($complaint[date_completed]){
+						echo " on " . $complaint[date_completed];
+					}
+					echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][status]\" value=\"$complaint[status]\" />\n";
+				}
+			else
+				{
+					echo "Status = $complaint[status]";
+					echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][status]\" value=\"$complaint[status]\" />\n";
+				}
+		}
+		echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][updateable]\" value=\"$complaint[updateable]\" />\n";
+		echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][date_approved]\" value=\"$complaint[date_approved]\" />\n";
+		echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][date_declined]\" value=\"$complaint[date_declined]\" />\n";
+		echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][date_completed]\" value=\"$complaint[date_completed]\" />\n";
+		echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][complaint]\" value=\"$complaint[complaint]\" />\n";
+		echo "<input type=\"hidden\" name=\"complaints[$complaint_seq][amount]\" value=\"$complaint[amount]\" />\n";
+
+		echo "</td>\n";
+		echo "<td>" . $complaint[complaint] . "</td>\n";
+		echo "<td align=\"right\">" . number_format( $complaint[amount], 2 ) . "</td>\n";
+		echo "</tr>\n";
+	}
+	$total = number_format( $total, 2 );
+	echo "<tr>\n";
+	echo "<td colspan=\"3\" align=\"right\"><b>Total Amount $$total</b></td>\n";
+	echo "</tr>\n";
+
+	echo "<tr>\n";
+	echo "<th colspan=\"3\" align=\"right\">Authorization Question and Answer</th>\n";
+	echo "</tr>\n";
+
+	echo "<tr>\n";
+	if ($auth_answer_id) {
+		$auth_quest_sql = "SELECT * FROM auth_question WHERE id='$auth_question_id' LIMIT 1";
+		$auth_quest_result = mysql_query( $auth_quest_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $auth_quest_sql );
+		$auth_quest_row = mysql_fetch_array( $auth_quest_result );
+		echo "<td colspan=\"3\">" . $auth_quest_row[question] . "\n";
+		echo "<input type=\"hidden\" name=\"auth_answer_id\" value=\"$auth_answer_id\" /><input type=\"hidden\" name=\"auth_question_id\" value=\"$auth_question_id\" /><input type=\"text\" name=\"auth_answer\" value=\"$auth_answer\" size=\"50\" maxlength=\"50\" /></td>\n";
+	} else {
+		echo "<td colspan=\"3\">\n";
+		$selected = "";
+		if ($auth_question_id == 0) {
+			$selected = " selected";
+		}
+		$select_box = "<select name=\"auth_question_id\" size=\"1\" onchange=\"data_changed=true;\">\n";
+		$select_box .= "<option value=\"$selected\">Select...</option>\n";
+		$select_sql = "SELECT * FROM auth_question ORDER BY id";
+		$select_result = mysql_query( $select_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $select_sql );
+		if( $select_row = mysql_fetch_array( $select_result ) ) {
+			do {
+				$select_id = $select_row[id];
+				$select_name = $select_row[question];
+				$selected = "";
+				if( $auth_question_id == $select_id ) {
+					$selected = " selected";
+				}
+				$select_box .= "<option value=\"$select_id\"$selected>$select_name</option>\n";
+			} while ($select_row = mysql_fetch_array($select_result));
+		}
+		$select_box .= "</select>\n";
+		echo $select_box;
+		echo "\n";
+		echo "<input type=\"hidden\" name=\"auth_answer_id\" value=\"$auth_answer_id\" /><input type=\"text\" name=\"auth_answer\" value=\"$auth_answer\" size=\"50\" maxlength=\"50\" /></td>\n";
+	}
+	echo "</tr>\n";
+	echo "<tr>\n";
+	echo "<td colspan=\"3\" align=\"center\"><input type=\"submit\" class=\"button\" value=\"Update\" name=\"update_complaints\"></td>\n";
+	echo "</tr>\n";
+	echo "</table>\n";
+	echo "</form>\n";
+?>
+</fieldset>
+</td>
+
+<td valign="top" width="34%">
+<fieldset style="padding: 2;">
+<legend>Vehicle History</legend>
+<?php
+	$vo_history_content="";
+	if ($vehicle_vin) {
+		$vo_history_sql="SELECT id, service_order_number FROM service_order WHERE vehicle_vin='$vehicle_vin' AND id <> '$cookie_vo_so_id' ORDER BY service_order_number";
+		$vo_history_result = mysql_query($vo_history_sql,$db) or die (mysql_error()."<br>SQL= ".$vo_history_sql);
+		if( $vo_history_row=mysql_fetch_array( $vo_history_result ) ) {
+			$vo_history_message = "The following service request(s) exist in the MyRepairTracker database for VIN <b>$vehicle_vin</b>:";
+			$vo_history_content = "<ul>";
+			do {
+				$vo_history_id = $vo_history_row[id];
+				$vo_history_service_order_number = $vo_history_row[service_order_number];
+				$vo_history_content .= "<li><a href=\"so_vo_mini.html?so_id=$vo_history_id&amp;so_order_number=$vo_history_service_order_number\" rel=\"gb_page_center[500, 615]\">$vo_history_service_order_number</a></li>";
+			} while ($vo_history_row=mysql_fetch_array($vo_history_result));
+			$vo_history_content .= "</ul>";
+		} else {
+			$vo_history_message = "There are no service request(s) in the MyRepairTracker database for VIN <b>$vehicle_vin</b>.";
+		}
+	} else {
+		$vo_history_message="There is no VIN recorded for this vehicle so Vehicle History cannot be checked.";
+	}
+	echo "<p>$vo_history_message</p>";
+	echo $vo_history_content;
+?>
+</fieldset>
+</td>
+
+</tr>
+</table>
+
+<table border="0" cellpadding="2" cellspacing="4" style="border-collapse: collapse" width="100%">
+<tr>
+<td valign="top">
+<fieldset style="padding: 2">
+<legend>Customer Repair Status &amp; Message Center</legend>
+<table border="0" cellpadding="2" cellspacing="1" style="border-collapse: collapse" width="100%">
+<tr>
+<td valign="top">
+<?php
+// A - Auto Status
+// C - Message from Customer, Customer repair authorization/decline
+// E - Message to Customer
+// O - Promise Date Override
+// T - Customer Complaint (old)
+
+$history_sql = "SELECT * FROM service_order_history WHERE (service_order_id=$cookie_vo_so_id) AND ((type='A') OR (type='C') OR (type='E') OR (type='O') OR (type='T')) ORDER BY id DESC";
+$history_result = mysql_query( $history_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $history_sql );
+if( $history_row = mysql_fetch_array( $history_result ) ) {
+	echo "<table align=\"center\" border=\"0\" cellpadding=\"2\" cellspacing=\"4\" style=\"border-collapse: collapse\" width=\"100%\">";
+	$prev_date = substr( $history_row['date_added'], 5, 2 ) . "-" . substr( $history_row['date_added'], 8, 2 ) . "-" . substr( $history_row['date_added'], 0, 4 );
+	do {
+		$history_note_user_id = $history_row[last_update_user_id];
+		$history_type = $history_row['type'];
+		$history_date_added = $history_row['date_added'];
+		$history_date = substr( $history_date_added, 5, 2 ) . "-" . substr( $history_date_added, 8, 2 ) . "-" . substr( $history_date_added, 0, 4 );
+		$history_date_time = date( "m-d-y g:i a", mktime( substr( $history_date_added, 11, 2 ), substr( $history_date_added, 14, 2 ), 0, substr( $history_date_added, 5, 2 ), substr( $history_date_added, 8, 2 ), substr( $history_date_added, 0, 4 ) ) );
+		$history_note = $history_row['note'];
+		$history_note = str_replace( "MESSAGE TO CUSTOMER", "MESSAGE FROM YOUR ADVISOR", $history_note );
+		$history_note = str_replace( "EMAIL TO CUSTOMER", "MESSAGE FROM YOUR ADVISOR", $history_note );
+		$history_note = str_replace( "MESSAGE FROM CUSTOMER", "MESSAGE TO YOUR ADVISOR", $history_note );
+		$history_note = str_replace( "Trim", "Reassembly", $history_note );
+		$history_note = str_replace( "trim", "reassembly", $history_note );
+		if( $history_date != $prev_date ) {
+			$prev_date = $history_date;
+			echo "<tr>\n";
+			echo "<td valign=\"top\" colspan=\"2\"><hr></td>\n";
+			echo "</tr>\n";
+		}
+		$class = "bold blue";
+		if( $history_type == "E" )
+			$class = "bold red";
+		if( $history_type == "C" )
+			$class = "bold green";
+		if( $history_note_user_id ) {
+			$user_sql = "SELECT user_first_name, user_last_name FROM user WHERE user_id='$history_note_user_id' AND service_provider_id='$service_provider_id'";
+			$user_result = mysql_query( $user_sql, $db ) or die( mysql_error( ) . "<br>SQL= " . $user_sql );
+			if( $user_row = mysql_fetch_array( $user_result ) ) {
+				$name = $user_row["user_first_name"] . " " . $user_row["user_last_name"];
+			} else {
+				$name = "USER ID $user_id)";
+			}
+		} else {
+			$name = "SYSTEM";
+		}
+		// echo "<p class=\"$class\">$history_date_time CT - $history_note</p>\n";
+		echo "<tr>\n";
+		echo "<td valign=\"top\" $class nowrap width=\"10%\"><b>$history_date_time CT<br>by $name</b></td>\n";
+		echo "<td valign=\"top\" $class width=\"90%\">$history_note</td>\n";
+		echo "</tr>\n";
+	} while ($history_row=mysql_fetch_array($history_result));
+	echo "</table>";
+} else {
+	echo "<p align=\"center\"><span class=\"bold\">*** NO REPAIR NOTES ***</span></p>\n";
+}
+?>
+</td>
+</tr>
+</table>
+</fieldset>
+</td>
+</tr>
+</table>
+<?php
+include "includes/footer.php";
+?>
